@@ -135,6 +135,15 @@ Retorna payload de validação da API:
 }
 ```
 
+## Especificações
+
+A documentação orientada a especificações está em:
+
+- `docs/specs/README.md`
+- `docs/specs/PRODUCT_SPEC_MVP.md`
+- `docs/specs/TECH_SPEC_MVP.md`
+- `docs/specs/SPEC_TEMPLATE.md`
+
 ## Próximos Passos Recomendados
 
 - Estruturar scripts de execução no backend (`dev`, `build`, `start`).

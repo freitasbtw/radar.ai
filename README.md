@@ -1,46 +1,147 @@
-# 🚀 Radar de Oportunidades de Leilão (SP)
+# Radar.ai
 
-**Radar de Oportunidades de Leilão (SP)** é uma plataforma de inteligência de dados focada em ajudar revendedores (pessoas físicas ou empresas) a encontrar, analisar e priorizar os lotes de leilão mais lucrativos no estado de São Paulo. A ideia central é automatizar a garimpagem de leilões e calcular o lucro potencial antes mesmo do usuário dar um lance, transformando compras governamentais/bancárias em uma decisão puramente matemática e baseada em dados reais.
+Plataforma para análise de oportunidades em leilões públicos e institucionais no estado de São Paulo.  
+O objetivo é transformar a triagem de lotes em um processo orientado por dados, com foco em margem potencial, risco e velocidade de revenda.
 
----
+## Status Atual
 
-## 🛑 O Problema que Resolve
+Este repositório está em fase inicial de desenvolvimento (MVP), com:
 
-Atualmente, quem compra em leilão para revender perde muito tempo lendo editais complexos, analisando lotes manualmente e pesquisando preços de mercado de forma inconsistente em diversas plataformas (como FIPE, Webmotors, ZAP Imóveis) apenas para saber se o lance inicial vale a pena ou não. É um processo lento, analógico e sujeito à emoção humana.
+- `frontend` em Next.js com landing page e proposta de valor do produto.
+- `backend` em Express com endpoint base para integração inicial.
 
-## 💡 A Solução
+## Arquitetura
 
-O projeto constrói um **Dashboard de Oportunidades** atualizado diariamente. O sistema atua como um "robô" inteligente que:
+O projeto está organizado como monorepo com duas aplicações independentes:
 
-1. **Coleta de Dados:** Busca automaticamente os lotes de leilões disponíveis em fontes oficiais (Receita Federal, Detran-SP, CAIXA, etc.).
-2. **Cruzamento de Preços:** Cruza o preço mínimo (lance inicial) exigido no leilão com os preços reais praticados no mercado para aquele mesmo bem (buscando dados em plataformas como FIPE, Mercado Livre, OLX, Webmotors).
-3. **Ranqueamento (Scoring):** Analisa e ranqueia os lotes, exibindo para o usuário apenas os mais promissores e lucrativos nas categorias de Automóveis, Imóveis e Eletrônicos.
+- `frontend`: interface web (Next.js 16 + React 19 + Tailwind CSS 4).
+- `backend`: API HTTP (Express 5 + TypeScript).
 
----
+Fluxo atual:
 
-## ⚙️ A "Mágica" do Sistema (Métricas Core)
+1. O frontend consome dados da API.
+2. O backend expõe endpoints HTTP em `/api`.
+3. A base atual serve como fundação para evoluir coleta, scoring e priorização de lotes.
 
-Para cada lote filtrado, o sistema calcula três indicadores vitais para o investidor/revendedor tomar uma decisão rápida:
+## Stack Tecnológica
 
-* 💰 **Spread Bruto (Lucro Potencial):**
-  A diferença financeira direta entre a **mediana de preço do mercado** e o **lance inicial** exigido no leilão.
-  
-* 🎯 **Score de Oportunidade (0 a 100):**
-  Uma nota matemática rigorosa que avalia a viabilidade do lote, pesada da seguinte forma:
-  * **60% - Tamanho do lucro** (Margem real esperada).
-  * **25% - Confiança do Match** (Certeza de que o item encontrado no mercado é exatamente igual ao do leilão).
-  * **15% - Liquidez** (Facilidade e velocidade de revenda do item).
+- Node.js
+- TypeScript
+- Next.js (App Router)
+- React
+- Tailwind CSS
+- Express
+- CORS e dotenv
 
-* ⚠️ **Risco (Baixo, Médio, Alto):**
-  Mede a segurança da operação baseado na variância de dados:
-  * **Alto:** Se o sistema encontrou poucos comparáveis no mercado (menos de 3) ou se os preços encontrados variam de forma extrema.
-  * **Baixo:** Se o sistema encontrou dezenas de itens similares com preços consistentes, indicando forte previsibilidade.
+## Estrutura de Pastas
 
----
+```text
+radar.ai/
+|- backend/
+|  |- src/
+|  |  |- config/
+|  |  |- controllers/
+|  |  |- middlewares/
+|  |  |- models/
+|  |  |- routes/
+|  |  |- services/
+|  |  |- app.ts
+|  |  \- server.ts
+|  |- package.json
+|  \- tsconfig.json
+|- frontend/
+|  |- src/app/
+|  |  |- layout.tsx
+|  |  |- page.tsx
+|  |  \- globals.css
+|  |- public/
+|  |- package.json
+|  \- next.config.ts
+\- README.md
+```
 
-## 📂 Estrutura do Projeto
+## Pré-requisitos
 
-* `PRD/` - Documentações e Requisitos do Produto (Product Requirements Document).
-* `prototype/` - MVP e protótipos em Python para coleta e análise inicial.
-  * `data/` - Base de dados e mockups JSON de itens de mercado comparáveis.
-  * `output/` - Dashboards e relatórios gerados pelo sistema sobre os lotes e editais (HTML e JSON).
+- Node.js 20+ (recomendado)
+- npm 10+ (ou versão compatível com Node 20+)
+
+## Configuração de Ambiente
+
+No backend, crie ou ajuste o arquivo `backend/.env` com:
+
+```env
+PORT=3333
+NODE_ENV=development
+```
+
+## Como Rodar Localmente
+
+### 1) Instalar dependências
+
+```bash
+cd backend
+npm install
+
+cd ../frontend
+npm install
+```
+
+### 2) Subir o backend
+
+```bash
+cd backend
+npx tsx src/server.ts
+```
+
+Servidor esperado: `http://localhost:3333`
+
+### 3) Subir o frontend
+
+```bash
+cd frontend
+npm run dev
+```
+
+Aplicação esperada: `http://localhost:3000`
+
+## Scripts Disponíveis
+
+### Frontend (`frontend/package.json`)
+
+- `npm run dev`: inicia ambiente de desenvolvimento.
+- `npm run build`: gera build de produção.
+- `npm run start`: executa build em modo produção.
+- `npm run lint`: executa lint com ESLint.
+
+### Backend (`backend/package.json`)
+
+- `npm test`: script placeholder (ainda não implementado).
+
+Comando prático para desenvolvimento no backend:
+
+```bash
+npx tsx src/server.ts
+```
+
+## API Atual
+
+### `GET /api`
+
+Retorna payload de validação da API:
+
+```json
+{
+  "message": "Hello from the Backend!"
+}
+```
+
+## Próximos Passos Recomendados
+
+- Estruturar scripts de execução no backend (`dev`, `build`, `start`).
+- Definir contrato de API para lotes, comparáveis e métricas de oportunidade.
+- Adicionar camada de persistência e serviço de coleta de dados.
+- Implementar testes automatizados (unitários e integração).
+
+## Licença
+
+Definir licença do projeto antes de publicação externa.

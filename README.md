@@ -144,6 +144,13 @@ A documentação orientada a especificações está em:
 - `docs/specs/TECH_SPEC_MVP.md`
 - `docs/specs/SPEC_TEMPLATE.md`
 
+## Documentação de APIs
+
+Documentação das fontes de dados e integrações:
+
+- `docs/apis/README.md`
+- `docs/apis/EXTERNAL_AUCTION_APIS.md`
+
 ## Próximos Passos Recomendados
 
 - Estruturar scripts de execução no backend (`dev`, `build`, `start`).

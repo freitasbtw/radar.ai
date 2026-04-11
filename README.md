@@ -72,6 +72,21 @@ No backend, crie ou ajuste o arquivo `backend/.env` com:
 ```env
 PORT=3333
 NODE_ENV=development
+
+# Supabase (necessário para ingestão)
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+
+# Worker de ingestão
+INGESTION_WORKER_ENABLED=false
+INGESTION_WORKER_INTERVAL_SECONDS=60
+```
+
+No frontend, crie `frontend/.env.local` com:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
 ## Como Rodar Localmente
@@ -150,6 +165,7 @@ Documentação das fontes de dados e integrações:
 
 - `docs/apis/README.md`
 - `docs/apis/EXTERNAL_AUCTION_APIS.md`
+- `docs/apis/SOURCE_REGISTRY_SUPABASE.md`
 
 ## Próximos Passos Recomendados
 

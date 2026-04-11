@@ -1,22 +1,37 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   ShieldCheck, 
-  TrendingUp, 
   Search, 
   Car, 
   Home, 
   Smartphone, 
   ArrowRight, 
-  CheckCircle2, 
-  Zap,
   Menu,
   X,
   Target,
   DollarSign
 } from 'lucide-react';
+import { Button, buttonVariants } from "@/components/ui/button";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription
+} from "@/components/ui/card";
+import { ContactForm } from "@/components/ContactForm";
+import { cn } from "@/lib/utils";
 
 const App = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -43,16 +58,19 @@ const App = () => {
           </div>
           
           <div className="hidden md:flex items-center gap-8 font-bold text-slate-600">
-            <a href="#como-funciona" className="hover:text-blue-600 transition-colors">Como Funciona</a>
-            <a href="#lucro" className="hover:text-blue-600 transition-colors">Onde está o Lucro?</a>
-            <button className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-200 active:scale-95">
+            <a href="#como-funciona" className="text-sm hover:text-blue-600 transition-colors">Como Funciona</a>
+            <a href="#lucro" className="text-sm hover:text-blue-600 transition-colors">Setores</a>
+            <Link
+              href="/auth/login"
+              className={cn(buttonVariants(), "rounded-xl shadow-sm text-sm")}
+            >
               Acessar Agora
-            </button>
+            </Link>
           </div>
 
-          <button className="md:hidden text-slate-800" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-            {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
-          </button>
+          <Button variant="ghost" size="icon" className="md:hidden text-slate-800" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </Button>
         </div>
       </nav>
 
@@ -60,56 +78,81 @@ const App = () => {
       <section className="relative pt-32 pb-16 lg:pt-48 lg:pb-32 overflow-hidden bg-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center max-w-4xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-emerald-200 shadow-sm animate-bounce">
-              <DollarSign size={16} /> <span>Pare de perder dinheiro em leilões ruins</span>
+            <div className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-slate-200 shadow-sm">
+              <Target size={16} /> <span>Monitoramento inteligente de leilões</span>
             </div>
-            <h1 className="text-5xl md:text-7xl font-black text-slate-900 leading-tight mb-8 tracking-tight">
-              Saiba exatamente quais leilões <br/> 
-              <span className="text-blue-600">valem o seu lance.</span>
+            <h1 className="text-4xl md:text-6xl font-black text-slate-900 leading-tight mb-8 tracking-tight">
+              Encontre os melhores leilões <br/> 
+              <span className="text-blue-600">com base em dados.</span>
             </h1>
-            <p className="text-xl md:text-2xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed font-medium">
-              Nós vasculhamos os leilões de São Paulo e te entregamos apenas o que tem <span className="font-black text-slate-900">margem real de revenda</span>. 
+            <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed">
+              Consolidamos informações dos principais leilões de São Paulo para que você possa focar apenas nas <span className="font-bold text-slate-900">melhores oportunidades</span>. 
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button className="w-full sm:w-auto bg-blue-600 text-white px-10 py-5 rounded-2xl text-xl font-black hover:bg-blue-700 transition-all flex items-center justify-center gap-3 shadow-2xl shadow-blue-200 hover:-translate-y-1">
-                QUERO VER AS OPORTUNIDADES <ArrowRight size={24} />
-              </button>
+              <Link
+                href="/auth/login"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "w-full sm:w-auto rounded-xl text-md font-bold shadow-md hover:-translate-y-1 transition-all"
+                )}
+              >
+                Acessar Plataforma <ArrowRight size={20} className="ml-2" />
+              </Link>
+              <Dialog>
+                <DialogTrigger
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "lg" }),
+                    "w-full sm:w-auto rounded-xl text-md font-bold shadow-sm"
+                  )}
+                >
+                  Fale Conosco
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Entre em contato</DialogTitle>
+                    <DialogDescription>
+                      Tem dúvidas sobre a plataforma? Envie uma mensagem e entraremos em contato o mais breve possível.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ContactForm onSuccess={() => alert("Mensagem enviada com sucesso!")} />
+                </DialogContent>
+              </Dialog>
             </div>
             
             {/* Visual do Dashboard */}
             <div className="mt-16 relative flex justify-center">
-              <div className="relative w-full max-w-5xl rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(8,_112,_184,_0.2)] border border-slate-200 bg-white">
+              <div className="relative w-full max-w-5xl rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
                 <div className="p-6 md:p-10 bg-white overflow-x-auto">
                   <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-xl font-bold flex items-center gap-2">
-                      <Target className="text-blue-600" /> Oportunidades de Hoje em SP
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                      <Target className="text-blue-600" size={20} /> Lotes Recentes - SP
                     </h3>
-                    <span className="text-slate-400 text-sm font-bold">Atualizado há 5 min</span>
+                    <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Última atualização: 5 min</span>
                   </div>
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
-                      <tr className="border-b-2 border-slate-100">
-                        <th className="pb-4 font-black text-slate-400 text-xs uppercase tracking-widest">O que é?</th>
-                        <th className="pb-4 font-black text-slate-400 text-xs uppercase tracking-widest">Lance Mínimo</th>
-                        <th className="pb-4 font-black text-slate-900 text-xs uppercase tracking-widest underline decoration-emerald-400 decoration-4">Ganho Estimado</th>
-                        <th className="pb-4 font-black text-slate-400 text-xs uppercase tracking-widest text-center">Chance de Venda</th>
+                      <tr className="border-b border-slate-200">
+                        <th className="pb-3 text-slate-500 text-xs uppercase font-bold tracking-wider">Descrição do Lote</th>
+                        <th className="pb-3 text-slate-500 text-xs uppercase font-bold tracking-wider">Lance Atual</th>
+                        <th className="pb-3 text-slate-500 text-xs uppercase font-bold tracking-wider">Valor de Mercado</th>
+                        <th className="pb-3 text-slate-500 text-xs uppercase font-bold tracking-wider text-center">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50 font-medium">
+                    <tbody className="divide-y divide-slate-100 font-medium">
                       {[
-                        { name: "Apartamento em Moema", source: "CAIXA", price: "R$ 420 mil", profit: "R$ 180 mil", chance: "Alta" },
-                        { name: "Toyota Corolla 2021", source: "Detran-SP", price: "R$ 62 mil", profit: "R$ 38 mil", chance: "Muito Alta" },
-                        { name: "Lote iPhones 14", source: "Receita Federal", price: "R$ 22 mil", profit: "R$ 15 mil", chance: "Instantânea" }
+                        { name: "Apartamento 80m² - Moema", source: "CAIXA", price: "R$ 420.000", profit: "R$ 600.000", chance: "Aberto" },
+                        { name: "Toyota Corolla XEi 2024", source: "Detran-SP", price: "R$ 82.000", profit: "R$ 115.000", chance: "Hoje" },
+                        { name: "Lote iPhones 15 Pro", source: "Receita Federal", price: "R$ 35.000", profit: "R$ 48.000", chance: "Aberto" }
                       ].map((item, i) => (
-                        <tr key={i} className="group hover:bg-blue-50 transition-colors">
-                          <td className="py-6">
-                            <div className="font-black text-lg text-slate-800">{item.name}</div>
-                            <div className="text-xs text-blue-600 font-bold uppercase">{item.source}</div>
+                        <tr key={i} className="group hover:bg-slate-50 transition-colors">
+                          <td className="py-4">
+                            <div className="font-semibold text-slate-800">{item.name}</div>
+                            <div className="text-[10px] text-blue-600 font-bold uppercase tracking-wider mt-1">{item.source}</div>
                           </td>
-                          <td className="py-6 text-slate-600 text-lg">{item.price}</td>
-                          <td className="py-6 font-black text-2xl text-emerald-600">{item.profit}</td>
-                          <td className="py-6 text-center">
-                            <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-xs font-black uppercase">
+                          <td className="py-4 text-slate-600 font-medium">{item.price}</td>
+                          <td className="py-4 font-semibold text-emerald-600">{item.profit}</td>
+                          <td className="py-4 text-center">
+                            <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider">
                               {item.chance}
                             </span>
                           </td>
@@ -152,32 +195,46 @@ const App = () => {
       <section id="como-funciona" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6">Chega de perder tempo com leilão "furado".</h2>
+            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6">Chega de perder tempo com leilão &quot;furado&quot;.</h2>
             <p className="text-slate-600 text-xl font-medium max-w-2xl mx-auto">Quem ganha dinheiro com leilão não fica lendo centenas de páginas de editais. Quem ganha dinheiro usa o Radar.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-12">
-            <div className="text-center">
-              <div className="bg-blue-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-8 text-blue-600">
-                <Search size={40} />
-              </div>
-              <h3 className="text-2xl font-black mb-4">Busca Automática</h3>
-              <p className="text-slate-600 font-medium">Nós lemos todos os leilões de SP por você. Separamos o ouro do lixo em segundos.</p>
-            </div>
-            <div className="text-center">
-              <div className="bg-emerald-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-8 text-emerald-600">
-                <DollarSign size={40} />
-              </div>
-              <h3 className="text-2xl font-black mb-4">Cálculo de Lucro Real</h3>
-              <p className="text-slate-600 font-medium">Comparamos o preço do leilão com o preço real de venda no mercado. Você já entra sabendo quanto pode ganhar.</p>
-            </div>
-            <div className="text-center">
-              <div className="bg-amber-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-8 text-amber-600">
-                <ShieldCheck size={40} />
-              </div>
-              <h3 className="text-2xl font-black mb-4">Segurança Total</h3>
-              <p className="text-slate-600 font-medium">Nossa nota de segurança te diz se o negócio é arriscado ou se é uma oportunidade imperdível.</p>
-            </div>
+            <Card className="text-center p-8 border-none shadow-none bg-transparent">
+              <CardHeader className="p-0 mb-8">
+                <div className="bg-blue-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto text-blue-600">
+                  <Search size={40} />
+                </div>
+              </CardHeader>
+              <CardTitle className="text-2xl font-black mb-4">Busca Automática</CardTitle>
+              <CardDescription className="text-slate-600 font-medium text-base">
+                Nós lemos todos os leilões de SP por você. Separamos o ouro do lixo em segundos.
+              </CardDescription>
+            </Card>
+            
+            <Card className="text-center p-8 border-none shadow-none bg-transparent">
+              <CardHeader className="p-0 mb-8">
+                <div className="bg-emerald-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto text-emerald-600">
+                  <DollarSign size={40} />
+                </div>
+              </CardHeader>
+              <CardTitle className="text-2xl font-black mb-4">Cálculo de Lucro Real</CardTitle>
+              <CardDescription className="text-slate-600 font-medium text-base">
+                Comparamos o preço do leilão com o preço real de venda no mercado. Você já entra sabendo quanto pode ganhar.
+              </CardDescription>
+            </Card>
+            
+            <Card className="text-center p-8 border-none shadow-none bg-transparent">
+              <CardHeader className="p-0 mb-8">
+                <div className="bg-amber-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto text-amber-600">
+                  <ShieldCheck size={40} />
+                </div>
+              </CardHeader>
+              <CardTitle className="text-2xl font-black mb-4">Segurança Total</CardTitle>
+              <CardDescription className="text-slate-600 font-medium text-base">
+                Nossa nota de segurança te diz se o negócio é arriscado ou se é uma oportunidade imperdível.
+              </CardDescription>
+            </Card>
           </div>
         </div>
       </section>
@@ -189,27 +246,27 @@ const App = () => {
           
           <div className="grid md:grid-cols-3 gap-8">
             <div className="bg-white/5 border border-white/10 p-10 rounded-[2rem] hover:bg-blue-600 transition-all cursor-default">
-              <Car size={48} className="mb-6" />
-              <h3 className="text-2xl font-black mb-4">Carros e Motos</h3>
-              <p className="text-slate-300 font-medium mb-6">Os veículos com maior giro em SP. Identificamos aqueles que estão muito abaixo da tabela FIPE.</p>
-              <div className="text-blue-300 font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                VER LOTES ATIVOS <ArrowRight size={16} />
+              <Car size={32} className="mb-6 text-blue-400" />
+              <h3 className="text-xl font-bold mb-3">Carros e Motos</h3>
+              <p className="text-slate-400 font-medium mb-6 text-sm">Veículos com maior giro em SP. Identificamos aqueles abaixo da FIPE com precisão.</p>
+              <div className="text-blue-400 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                VER LOTES <ArrowRight size={14} />
               </div>
             </div>
-            <div className="bg-white/5 border border-white/10 p-10 rounded-[2rem] hover:bg-blue-600 transition-all cursor-default">
-              <Home size={48} className="mb-6" />
-              <h3 className="text-2xl font-black mb-4">Casas e Aptos</h3>
-              <p className="text-slate-300 font-medium mb-6">Imóveis da CAIXA e judiciais. Calculamos o valor por metro quadrado do bairro para garantir seu lucro.</p>
-              <div className="text-blue-300 font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                VER LOTES ATIVOS <ArrowRight size={16} />
+            <div className="bg-white/5 border border-white/10 p-8 rounded-2xl hover:bg-white/10 transition-colors cursor-default">
+              <Home size={32} className="mb-6 text-emerald-400" />
+              <h3 className="text-xl font-bold mb-3">Casas e Aptos</h3>
+              <p className="text-slate-400 font-medium mb-6 text-sm">Imóveis da CAIXA e judiciais com cálculos automáticos de região.</p>
+              <div className="text-emerald-400 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                VER LOTES <ArrowRight size={14} />
               </div>
             </div>
-            <div className="bg-white/5 border border-white/10 p-10 rounded-[2rem] hover:bg-blue-600 transition-all cursor-default">
-              <Smartphone size={48} className="mb-6" />
-              <h3 className="text-2xl font-black mb-4">Eletrônicos</h3>
-              <p className="text-slate-300 font-medium mb-6">Lotes da Receita Federal. iPhones, notebooks e hardware com margens impressionantes.</p>
-              <div className="text-blue-300 font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                VER LOTES ATIVOS <ArrowRight size={16} />
+            <div className="bg-white/5 border border-white/10 p-8 rounded-2xl hover:bg-white/10 transition-colors cursor-default">
+              <Smartphone size={32} className="mb-6 text-purple-400" />
+              <h3 className="text-xl font-bold mb-3">Eletrônicos</h3>
+              <p className="text-slate-400 font-medium mb-6 text-sm">Hardware e gadgets com avaliações de margem estruturadas.</p>
+              <div className="text-purple-400 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                VER LOTES <ArrowRight size={14} />
               </div>
             </div>
           </div>
@@ -217,46 +274,34 @@ const App = () => {
       </section>
 
       {/* CTA Final */}
-      <section className="py-24 bg-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-blue-600 rounded-[3rem] p-12 md:p-20 text-center relative overflow-hidden shadow-2xl shadow-blue-200">
-            <div className="relative z-10">
-              <h2 className="text-4xl md:text-6xl font-black text-white mb-8">O próximo grande negócio está aqui.</h2>
-              <p className="text-blue-100 text-xl md:text-2xl mb-12 font-medium">
-                Aproveite o acesso gratuito à nossa ferramenta enquanto estamos em fase de testes. 
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                <input 
-                  type="email" 
-                  placeholder="Seu melhor e-mail" 
-                  className="w-full sm:w-96 px-8 py-5 rounded-2xl focus:outline-none text-slate-800 text-lg font-bold"
-                />
-                <button className="w-full sm:w-auto bg-slate-900 text-white px-12 py-5 rounded-2xl font-black text-xl hover:bg-black transition-all shadow-xl active:scale-95 uppercase">
-                  COMEÇAR AGORA
-                </button>
-              </div>
-              <p className="mt-8 text-blue-200 text-sm font-bold uppercase tracking-widest">
-                Sem cartões. Sem taxas. Apenas oportunidades.
-              </p>
-            </div>
+      <section className="py-24 bg-white border-b border-slate-100">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">Decisões baseadas em dados</h2>
+          <p className="text-slate-500 text-lg md:text-xl mb-10">
+            Acesse o sistema e comece sua pesquisa profissional. Restrito para investidores convidados.
+          </p>
+          <div className="flex justify-center items-center">
+            <Link href="/auth/login" className="w-full sm:w-auto bg-blue-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-sm hover:-translate-y-1">
+              Acessar Sistema <ArrowRight size={18} />
+            </Link>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-50 py-16 border-t border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-8">
+      <footer className="bg-slate-50 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="bg-blue-600 p-1.5 rounded-lg">
               <BarChart3 className="text-white w-5 h-5" />
             </div>
-            <span className="text-2xl font-black tracking-tighter text-slate-800">RADAR<span className="text-blue-600">SP</span></span>
+            <span className="text-xl font-black tracking-tighter text-slate-800">RADAR<span className="text-blue-600">SP</span></span>
           </div>
-          <div className="text-slate-400 text-sm font-bold uppercase tracking-widest">
-            © 2024 RADAR SP - INTELIGÊNCIA EM LEILÕES
+          <div className="text-slate-500 text-sm font-medium">
+            © 2026 Radar SP - Inteligência de Dados
           </div>
-          <div className="flex gap-8 text-slate-500 font-bold text-sm uppercase">
-            <a href="#" className="hover:text-blue-600 transition-colors">Aviso Legal</a>
+          <div className="flex gap-6 text-slate-500 font-medium text-sm">
+            <a href="#" className="hover:text-blue-600 transition-colors">Termos</a>
             <a href="#" className="hover:text-blue-600 transition-colors">Privacidade</a>
           </div>
         </div>

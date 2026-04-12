@@ -1,12 +1,11 @@
 ﻿"use client";
 
-import { useRouter } from "next/navigation";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Search, X, MapPin, Calendar, ExternalLink, LogOut } from "lucide-react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 type DashboardLot = {
   id: number;
@@ -20,6 +19,9 @@ type DashboardLot = {
   lot_url: string | null;
   auction_date: string | null;
   updated_at: string;
+  image_url: string | null;
+  appraisal_value: number | null;
+  description: string | null;
 };
 
 type PollState = {
@@ -35,6 +37,7 @@ type LotFilters = {
   category: string;
   location: string;
   status: string;
+  orderBy: string;
 };
 
 const INITIAL_FILTERS: LotFilters = {
@@ -43,10 +46,11 @@ const INITIAL_FILTERS: LotFilters = {
   category: "",
   location: "",
   status: "",
+  orderBy: "recent",
 };
 
 function currency(value: number | null): string {
-  if (value === null || Number.isNaN(value)) return "-";
+  if (value === null || Number.isNaN(value)) return "R$ -";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
@@ -60,99 +64,244 @@ function dateTime(value: string | null): string {
   }).format(date);
 }
 
-const PAGE_SIZE = 25;
-const FILTER_KEYS = ["title", "source_key", "category", "location", "status"] as const;
+const PAGE_SIZE = 24; 
+const ORDER_BY_OPTIONS = [
+  "recent",
+  "min_bid_asc",
+  "min_bid_desc",
+  "appraisal_desc",
+  "auction_date_asc",
+  "auction_date_desc",
+  "spread_desc",
+  "spread_asc",
+] as const;
+
+type SearchParamsReader = {
+  get(name: string): string | null;
+};
+
+function parseDashboardStateFromQuery(searchParams: SearchParamsReader): {
+  page: number;
+  filters: LotFilters;
+} {
+  const pageParam = Number(searchParams.get("page") ?? "1");
+  const page = Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
+  const orderByCandidate = (searchParams.get("sort") ?? "recent").trim();
+  const orderBy = ORDER_BY_OPTIONS.includes(orderByCandidate as (typeof ORDER_BY_OPTIONS)[number])
+    ? orderByCandidate
+    : "recent";
+
+  return {
+    page,
+    filters: {
+      title: (searchParams.get("title") ?? "").trim(),
+      source_key: (searchParams.get("source") ?? "").trim(),
+      category: (searchParams.get("category") ?? "").trim(),
+      location: (searchParams.get("location") ?? "").trim(),
+      status: (searchParams.get("status") ?? "").trim(),
+      orderBy,
+    },
+  };
+}
+
+function buildDashboardQueryString(filters: LotFilters, page: number): string {
+  const params = new URLSearchParams();
+
+  if (filters.title.trim()) params.set("title", filters.title.trim());
+  if (filters.source_key.trim()) params.set("source", filters.source_key.trim());
+  if (filters.category.trim()) params.set("category", filters.category.trim());
+  if (filters.location.trim()) params.set("location", filters.location.trim());
+  if (filters.status.trim()) params.set("status", filters.status.trim());
+  if (filters.orderBy !== "recent") params.set("sort", filters.orderBy);
+  if (page > 1) params.set("page", String(page));
+
+  return params.toString();
+}
+
+function areFiltersEqual(a: LotFilters, b: LotFilters): boolean {
+  return (
+    a.title === b.title &&
+    a.source_key === b.source_key &&
+    a.category === b.category &&
+    a.location === b.location &&
+    a.status === b.status &&
+    a.orderBy === b.orderBy
+  );
+}
+
+function hasActiveFilters(filters: LotFilters): boolean {
+  return Boolean(
+    filters.title.trim() ||
+      filters.source_key.trim() ||
+      filters.category.trim() ||
+      filters.location.trim() ||
+      filters.status.trim() ||
+      filters.orderBy !== "recent"
+  );
+}
 
 function toLikePattern(value: string): string {
   const normalized = value.trim().replaceAll("%", "").replaceAll("_", "");
   return `%${normalized}%`;
 }
 
+function calculateSpread(appraisal: number | null, bid: number | null): { percent: number; formatted: string } | null {
+  if (!appraisal || !bid || appraisal <= 0 || bid >= appraisal) return null;
+  const rawSpread = appraisal - bid;
+  const percent = Math.round((rawSpread / bid) * 100);
+  const formatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(rawSpread);
+  return { percent, formatted };
+}
+
 export default function DashboardPage() {
+  const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = useMemo(() => getBrowserSupabaseClient(), []);
   const pollStateLoadedRef = useRef(false);
+  const hasLoadedOnceRef = useRef(false);
+  const resultsHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const initialQueryState = useMemo(() => parseDashboardStateFromQuery(searchParams), [searchParams]);
 
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lots, setLots] = useState<DashboardLot[]>([]);
   const [pollState, setPollState] = useState<PollState[]>([]);
   const [totalLots, setTotalLots] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [activeFilter, setActiveFilter] = useState<keyof LotFilters | null>(null);
-  const [filters, setFilters] = useState<LotFilters>({ ...INITIAL_FILTERS });
-  const [filterDraft, setFilterDraft] = useState<LotFilters>({ ...INITIAL_FILTERS });
+  const [currentPage, setCurrentPage] = useState(initialQueryState.page);
+  const [filters, setFilters] = useState<LotFilters>({ ...initialQueryState.filters });
+  const [filterDraft, setFilterDraft] = useState<LotFilters>({ ...initialQueryState.filters });
+
+  const syncUrlState = useCallback(
+    (nextFilters: LotFilters, nextPage: number) => {
+      const query = buildDashboardQueryString(nextFilters, nextPage);
+      const href = query ? `${pathname}?${query}` : pathname;
+      router.replace(href, { scroll: false });
+    },
+    [pathname, router]
+  );
 
   useEffect(() => {
+    const nextState = parseDashboardStateFromQuery(searchParams);
+    setCurrentPage((prev) => (prev === nextState.page ? prev : nextState.page));
+    setFilters((prev) => (areFiltersEqual(prev, nextState.filters) ? prev : nextState.filters));
+    setFilterDraft((prev) => (areFiltersEqual(prev, nextState.filters) ? prev : nextState.filters));
+  }, [searchParams]);
+
+  useEffect(() => {
+    let isActive = true;
+
     async function loadDashboardData() {
+      const isInitialLoad = !hasLoadedOnceRef.current;
       setError(null);
-
-      if (!supabase) {
-        setError(
-          "Supabase não configurado no frontend. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (ou NEXT_PUBLIC_SUPABASE_ANON_KEY) em frontend/.env.local e reinicie o servidor."
-        );
-        setLoading(false);
-        return;
+      if (isInitialLoad) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        router.replace("/auth/login");
-        return;
+      try {
+        if (!supabase) {
+          if (!isActive) return;
+          setError(
+            "Supabase não configurado no frontend. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY em frontend/.env.local"
+          );
+          return;
+        }
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!isActive) return;
+        if (!sessionData.session) {
+          router.replace("/auth/login");
+          return;
+        }
+
+        const from = (currentPage - 1) * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
+        let lotsQuery = supabase
+          .from("auction_lots")
+          .select("id,source_key,title,category,status,city,state,min_bid,lot_url,auction_date,updated_at,image_url,appraisal_value,description", {
+            count: "exact",
+          });
+
+        if (filters.orderBy === "min_bid_asc") {
+          lotsQuery = lotsQuery.order("min_bid", { ascending: true, nullsFirst: false });
+        } else if (filters.orderBy === "min_bid_desc") {
+          lotsQuery = lotsQuery.order("min_bid", { ascending: false, nullsFirst: false });
+        } else if (filters.orderBy === "appraisal_desc") {
+          lotsQuery = lotsQuery.order("appraisal_value", { ascending: false, nullsFirst: false });
+        } else if (filters.orderBy === "auction_date_asc") {
+          lotsQuery = lotsQuery.order("auction_date", { ascending: true, nullsFirst: false });
+        } else if (filters.orderBy === "auction_date_desc") {
+          lotsQuery = lotsQuery.order("auction_date", { ascending: false, nullsFirst: false });
+        } else if (filters.orderBy === "spread_desc") {
+          lotsQuery = lotsQuery.order("spread_percent", { ascending: false, nullsFirst: false });
+        } else if (filters.orderBy === "spread_asc") {
+          lotsQuery = lotsQuery.order("spread_percent", { ascending: true, nullsFirst: false });
+        } else {
+          lotsQuery = lotsQuery.order("updated_at", { ascending: false });
+        }
+
+        if (filters.title) lotsQuery = lotsQuery.ilike("title", toLikePattern(filters.title));
+        if (filters.source_key) lotsQuery = lotsQuery.ilike("source_key", toLikePattern(filters.source_key));
+        if (filters.category) lotsQuery = lotsQuery.ilike("category", toLikePattern(filters.category));
+        if (filters.status) lotsQuery = lotsQuery.ilike("status", toLikePattern(filters.status));
+        if (filters.location) {
+          if (filters.location.length === 2) {
+             lotsQuery = lotsQuery.eq("state", filters.location);
+          } else {
+             const locationLike = toLikePattern(filters.location);
+             lotsQuery = lotsQuery.or(`city.ilike.${locationLike},state.ilike.${locationLike}`);
+          }
+        }
+
+        const lotsPromise = lotsQuery.range(from, to);
+
+        const pollPromise = pollStateLoadedRef.current
+          ? Promise.resolve({ data: null, error: null })
+          : supabase
+              .from("source_poll_state")
+              .select("source_key,last_success_at,consecutive_failures,next_poll_at")
+              .order("source_key", { ascending: true });
+
+        const [lotsResponse, pollResponse] = await Promise.all([lotsPromise, pollPromise]);
+        if (!isActive) return;
+
+        if (lotsResponse.error) {
+          setError(lotsResponse.error.message);
+          return;
+        }
+
+        if (pollResponse.error) {
+          setError(pollResponse.error.message);
+          return;
+        }
+
+        setLots((lotsResponse.data ?? []) as DashboardLot[]);
+        if (!pollStateLoadedRef.current && pollResponse.data) {
+          setPollState((pollResponse.data ?? []) as PollState[]);
+          pollStateLoadedRef.current = true;
+        }
+        setTotalLots(lotsResponse.count ?? 0);
+      } catch (err) {
+        if (!isActive) return;
+        setError(err instanceof Error ? err.message : "Erro inesperado ao carregar os lotes.");
+      } finally {
+        if (!isActive) return;
+        if (isInitialLoad) {
+          setLoading(false);
+          hasLoadedOnceRef.current = true;
+        }
+        setIsRefreshing(false);
       }
-
-      const from = (currentPage - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-
-      let lotsQuery = supabase
-        .from("auction_lots")
-        .select("id,source_key,title,category,status,city,state,min_bid,lot_url,auction_date,updated_at", {
-          count: "exact",
-        })
-        .order("updated_at", { ascending: false });
-
-      if (filters.title) lotsQuery = lotsQuery.ilike("title", toLikePattern(filters.title));
-      if (filters.source_key) lotsQuery = lotsQuery.ilike("source_key", toLikePattern(filters.source_key));
-      if (filters.category) lotsQuery = lotsQuery.ilike("category", toLikePattern(filters.category));
-      if (filters.status) lotsQuery = lotsQuery.ilike("status", toLikePattern(filters.status));
-      if (filters.location) {
-        const locationLike = toLikePattern(filters.location);
-        lotsQuery = lotsQuery.or(`city.ilike.${locationLike},state.ilike.${locationLike}`);
-      }
-
-      const lotsPromise = lotsQuery.range(from, to);
-
-      const pollPromise = pollStateLoadedRef.current
-        ? Promise.resolve({ data: null, error: null })
-        : supabase
-            .from("source_poll_state")
-            .select("source_key,last_success_at,consecutive_failures,next_poll_at")
-            .order("source_key", { ascending: true });
-
-      const [lotsResponse, pollResponse] = await Promise.all([lotsPromise, pollPromise]);
-
-      if (lotsResponse.error) {
-        setError(lotsResponse.error.message);
-        setLoading(false);
-        return;
-      }
-
-      if (pollResponse.error) {
-        setError(pollResponse.error.message);
-        setLoading(false);
-        return;
-      }
-
-      setLots((lotsResponse.data ?? []) as DashboardLot[]);
-      if (!pollStateLoadedRef.current && pollResponse.data) {
-        setPollState((pollResponse.data ?? []) as PollState[]);
-        pollStateLoadedRef.current = true;
-      }
-      setTotalLots(lotsResponse.count ?? 0);
-      setLoading(false);
     }
 
     loadDashboardData();
+    return () => {
+      isActive = false;
+    };
   }, [currentPage, filters, router, supabase]);
 
   async function signOut() {
@@ -161,334 +310,352 @@ export default function DashboardPage() {
     router.replace("/auth/login");
   }
 
-  const failures = pollState.reduce((acc, item) => acc + item.consecutive_failures, 0);
-  const latestSync = pollState
-    .map((item) => item.last_success_at)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1) ?? null;
-  const activeFiltersCount = FILTER_KEYS.filter((key) => filters[key]).length;
   const totalPages = Math.max(1, Math.ceil(totalLots / PAGE_SIZE));
-  const pageStart = totalLots === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const pageEnd = Math.min(currentPage * PAGE_SIZE, totalLots);
 
-  function toggleFilter(key: keyof LotFilters) {
-    setActiveFilter((current) => (current === key ? null : key));
-  }
-
-  function applyFilter(key: keyof LotFilters) {
+  function applyFilter() {
+    const nextFilters: LotFilters = {
+      ...filterDraft,
+      title: filterDraft.title.trim(),
+      source_key: filterDraft.source_key.trim(),
+      category: filterDraft.category.trim(),
+      location: filterDraft.location.trim(),
+      status: filterDraft.status.trim(),
+    };
     setCurrentPage(1);
-    setFilters((current) => ({ ...current, [key]: filterDraft[key].trim() }));
-  }
-
-  function clearFilter(key: keyof LotFilters) {
-    setCurrentPage(1);
-    setFilterDraft((current) => ({ ...current, [key]: "" }));
-    setFilters((current) => ({ ...current, [key]: "" }));
+    setFilterDraft(nextFilters);
+    setFilters(nextFilters);
+    syncUrlState(nextFilters, 1);
   }
 
   function clearAllFilters() {
+    const nextFilters = { ...INITIAL_FILTERS };
     setCurrentPage(1);
-    setActiveFilter(null);
-    setFilterDraft({ ...INITIAL_FILTERS });
-    setFilters({ ...INITIAL_FILTERS });
+    setFilterDraft(nextFilters);
+    setFilters(nextFilters);
+    syncUrlState(nextFilters, 1);
   }
 
-  function onFilterKeyDown(event: KeyboardEvent<HTMLInputElement>, key: keyof LotFilters) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      applyFilter(key);
-      setActiveFilter(null);
-    }
-    if (event.key === "Escape") setActiveFilter(null);
-  }
-
-  function columnHeader(label: string, key: keyof LotFilters) {
-    const isOpen = activeFilter === key;
-    const hasValue = Boolean(filters[key]);
-
-    return (
-      <div className="flex items-start gap-2">
-        <div className="flex-1">
-          <div className="flex items-center gap-1.5">
-            <span>{label}</span>
-            {hasValue ? <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">ativo</span> : null}
-          </div>
-          {isOpen ? (
-            <div className="mt-2 flex items-center gap-1">
-              <Input
-                value={filterDraft[key]}
-                onChange={(event) =>
-                  setFilterDraft((current) => ({ ...current, [key]: event.target.value }))
-                }
-                onKeyDown={(event) => onFilterKeyDown(event, key)}
-                className="w-28 h-7 text-[11px] normal-case bg-white px-2"
-                placeholder="Pesquisar..."
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => applyFilter(key)}
-                className="h-7 px-2 text-[11px] normal-case"
-              >
-                OK
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => clearFilter(key)}
-                className="h-7 px-2 text-[11px] normal-case"
-              >
-                Limpar
-              </Button>
-            </div>
-          ) : null}
-        </div>
-        <button
-          onClick={() => toggleFilter(key)}
-          className={`rounded border p-1 ${hasValue ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-500 hover:bg-slate-100"}`}
-          aria-label={`Filtrar coluna ${label}`}
-          title={`Filtrar ${label.toLowerCase()}`}
-        >
-          <Search size={12} />
-        </button>
-      </div>
-    );
+  function goToPage(nextPage: number) {
+    const boundedPage = Math.max(1, Math.min(totalPages, nextPage));
+    if (boundedPage === currentPage) return;
+    setCurrentPage(boundedPage);
+    syncUrlState(filters, boundedPage);
+    resultsHeadingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-50 text-slate-900 p-6 md:p-10">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 animate-pulse">
-            <div>
-              <div className="h-4 w-24 bg-slate-200 rounded mb-3"></div>
-              <div className="h-10 w-64 bg-slate-200 rounded mb-2"></div>
-              <div className="h-4 w-96 bg-slate-200 rounded"></div>
-            </div>
-            <div className="h-12 w-24 bg-slate-200 rounded-xl"></div>
-          </header>
-          
-          <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 border border-slate-200">
-                <div className="h-4 w-24 bg-slate-200 rounded mb-3"></div>
-                <div className="h-8 w-16 bg-slate-200 rounded"></div>
-              </div>
-            ))}
-          </section>
-
-          <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden animate-pulse">
-            <div className="px-5 py-4 border-b border-slate-200">
-              <div className="h-6 w-64 bg-slate-200 rounded"></div>
-            </div>
-            <div className="p-5 space-y-4">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="h-12 w-full bg-slate-100 rounded"></div>
-              ))}
-            </div>
-          </section>
-        </div>
+      <main className="min-h-screen bg-slate-50 p-6 md:p-10 flex items-center justify-center">
+         <div className="text-xl font-bold text-slate-500 animate-pulse">Carregando oportunidades…</div>
       </main>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-900 p-8">
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
         <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-sm border border-red-100 text-center">
-          <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <X className="text-red-500" size={40} />
-          </div>
+          <div className="text-red-500 mb-4 flex justify-center"><X size={48} /></div>
           <h1 className="text-2xl font-black mb-3">Falha ao carregar</h1>
           <p className="text-slate-600 mb-6">{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition"
-          >
+          <Button onClick={() => window.location.reload()} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold">
             Tentar Novamente
-          </button>
+          </Button>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 p-6 md:p-10 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 pb-6 border-b border-slate-200">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xl font-bold tracking-tight text-slate-800">RADAR<span className="text-blue-600">SP</span></span>
-              <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest hidden sm:inline-block">Painel de Controle</span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Monitoramento de Lotes</h1>
+    <main className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xl font-black tracking-tight text-slate-800">
+              RADAR<span className="text-blue-600">SP</span>
+            </span>
           </div>
-
-          <button
+          <Button
             onClick={signOut}
-            className="text-sm text-slate-500 font-semibold hover:text-slate-900 transition-colors self-start md:self-center"
+            className="text-sm font-bold transition flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white focus-visible:ring-red-300"
           >
-            Encerrar Sessão
-          </button>
-        </header>
+            <LogOut className="w-4 h-4" /> Sair
+          </Button>
+        </div>
+      </header>
 
-        <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total de lotes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-slate-800">{totalLots}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-wider">Lotes Exibidos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-slate-800">{lots.length}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-wider">Última Sincronização</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-lg font-semibold text-slate-700">{dateTime(latestSync)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status do Coletor</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className={`text-lg font-bold ${failures > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                {failures > 0 ? `${failures} falhas registradas` : 'Operante'}
-              </p>
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 bg-slate-50/50">
-            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Oportunidades Ativas</h2>
-            {activeFiltersCount > 0 ? (
-              <button
-                onClick={clearAllFilters}
-                className="text-[11px] font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
-              >
-                Limpar {activeFiltersCount} Filtro{activeFiltersCount > 1 ? 's' : ''}
-              </button>
-            ) : null}
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-6">
+        
+        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col gap-4">
+          <div className="relative">
+            <label htmlFor="dashboard-search" className="sr-only">
+              Buscar por título do lote
+            </label>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Input 
+              id="dashboard-search"
+              name="title"
+              autoComplete="off"
+              className="h-14 bg-slate-50 text-lg pl-12 pr-4 w-full rounded-xl border-slate-200 focus:border-blue-500 focus:ring-blue-500 shadow-inner" 
+              placeholder="Encontre sua próxima oportunidade (ex: apartamento em São Paulo)…" 
+              value={filterDraft.title}
+              onChange={(e) => setFilterDraft(f => ({ ...f, title: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && applyFilter()}
+            />
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left">
-              <thead className="bg-slate-50 shadow-[inset_0_-1px_0_0_rgba(226,232,240,1)]">
-                <tr>
-                  <th className="px-5 py-3 text-[10px] uppercase tracking-widest text-slate-500 font-bold whitespace-nowrap">{columnHeader("Descrição", "title")}</th>
-                  <th className="px-5 py-3 text-[10px] uppercase tracking-widest text-slate-500 font-bold whitespace-nowrap">{columnHeader("Origem", "source_key")}</th>
-                  <th className="px-5 py-3 text-[10px] uppercase tracking-widest text-slate-500 font-bold whitespace-nowrap">{columnHeader("Setor", "category")}</th>
-                  <th className="px-5 py-3 text-[10px] uppercase tracking-widest text-slate-500 font-bold whitespace-nowrap">{columnHeader("Região", "location")}</th>
-                  <th className="px-5 py-3 text-[10px] uppercase tracking-widest text-slate-500 font-bold whitespace-nowrap">Em Atualização</th>
-                  <th className="px-5 py-3 text-[10px] uppercase tracking-widest text-slate-500 font-bold whitespace-nowrap">Conferência</th>
-                  <th className="px-5 py-3 text-[10px] uppercase tracking-widest text-slate-500 font-bold whitespace-nowrap">{columnHeader("Estado", "status")}</th>
-                  <th className="px-5 py-3 text-[10px] uppercase tracking-widest text-slate-500 font-bold whitespace-nowrap">Sincronia</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {lots.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-24 text-center">
-                      <div className="flex flex-col items-center justify-center text-slate-500">
-                        <Search size={48} className="text-slate-300 mb-4" />
-                        <h3 className="text-xl font-bold text-slate-700">Nenhum lote encontrado</h3>
-                        <p className="mt-2 text-sm max-w-sm text-center">
-                          Não encontramos nenhum leilão com os filtros atuais. Tente limpar a busca e tentar de novo.
-                        </p>
-                        {activeFiltersCount > 0 && (
-                          <button
-                            onClick={clearAllFilters}
-                            className="mt-6 bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-2 rounded-xl transition-colors font-bold text-sm"
-                          >
-                            Limpar Filtros
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  lots.map((lot) => (
-                    <tr key={lot.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-4 font-medium text-slate-800 text-sm max-w-sm truncate" title={lot.title}>{lot.title}</td>
-                      <td className="px-5 py-4">
-                        <span className="bg-slate-100 text-slate-600 text-[10px] tracking-wider px-2 py-1 flex items-center w-max rounded font-bold uppercase">
-                          {lot.source_key}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="text-slate-600 text-xs font-medium capitalize w-max flex items-center gap-1">
-                          {lot.category}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-xs text-slate-500">
-                        {[lot.city, lot.state].filter(Boolean).join(" / ") || "-"}
-                      </td>
-                      <td className="px-5 py-4 text-emerald-700 font-bold text-sm">{currency(lot.min_bid)}</td>
-                      <td className="px-5 py-4">
-                        {lot.lot_url ? (
-                          <a
-                            href={lot.lot_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 font-semibold hover:underline inline-flex items-center gap-1 text-xs"
-                          >
-                            Abrir Anúncio <Search size={12} />
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`text-[10px] tracking-wider px-2 py-1 rounded font-bold uppercase w-max flex items-center gap-1 ${lot.status === 'ACTIVE' || lot.status === 'OPEN' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${lot.status === 'ACTIVE' || lot.status === 'OPEN' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-                          {lot.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap text-slate-400 text-xs">{dateTime(lot.updated_at)}</td>
-                    </tr>
-                  ))
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div className="space-y-1">
+              <label htmlFor="dashboard-filter-location" className="text-xs font-semibold text-slate-500">
+                Local
+              </label>
+              <select
+                id="dashboard-filter-location"
+                name="location"
+                aria-label="Filtrar por local"
+                className="h-12 w-full bg-slate-50 text-sm text-slate-700 px-4 outline-none ring-1 ring-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none font-medium hover:bg-slate-100 transition-colors"
+                style={{ backgroundImage: `url('data:image/svg+xml;charset=US-ASCII,<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="%2364748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>')`, backgroundRepeat: "no-repeat", backgroundPosition: "right 16px center" }}
+                value={filterDraft.location}
+                onChange={(e) => setFilterDraft((f) => ({ ...f, location: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && applyFilter()}
+              >
+                <option value="">Qualquer Local</option>
+                <option value="SP">São Paulo (SP)</option>
+                <option value="RJ">Rio de Janeiro (RJ)</option>
+                <option value="MG">Minas Gerais (MG)</option>
+                <option value="PR">Paraná (PR)</option>
+                <option value="RS">Rio Grande do Sul (RS)</option>
+                <option value="SC">Santa Catarina (SC)</option>
+                <option value="BA">Bahia (BA)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="dashboard-filter-source" className="text-xs font-semibold text-slate-500">
+                Origem
+              </label>
+              <select
+                id="dashboard-filter-source"
+                name="source"
+                aria-label="Filtrar por origem"
+                className="h-12 w-full bg-slate-50 text-sm text-slate-700 px-4 outline-none ring-1 ring-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none font-medium hover:bg-slate-100 transition-colors"
+                style={{ backgroundImage: `url('data:image/svg+xml;charset=US-ASCII,<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="%2364748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>')`, backgroundRepeat: "no-repeat", backgroundPosition: "right 16px center" }}
+                value={filterDraft.source_key}
+                onChange={(e) => setFilterDraft((f) => ({ ...f, source_key: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && applyFilter()}
+              >
+                <option value="">Todas as Origens</option>
+                <option value="caixa">Caixa Econômica</option>
+                <option value="receita">Receita Federal</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="dashboard-filter-sort" className="text-xs font-semibold text-slate-500">
+                Ordenação
+              </label>
+              <select
+                id="dashboard-filter-sort"
+                name="sort"
+                aria-label="Ordenar resultados"
+                className="h-12 w-full bg-slate-50 text-sm text-slate-700 px-4 outline-none ring-1 ring-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none font-medium hover:bg-slate-100 transition-colors"
+                style={{ backgroundImage: `url('data:image/svg+xml;charset=US-ASCII,<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="%2364748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>')`, backgroundRepeat: "no-repeat", backgroundPosition: "right 16px center" }}
+                value={filterDraft.orderBy}
+                onChange={(e) => setFilterDraft((f) => ({ ...f, orderBy: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && applyFilter()}
+              >
+                <option value="recent">Mais Recentes</option>
+                <option value="min_bid_asc">Menor Lance Inicial</option>
+                <option value="min_bid_desc">Maior Lance Inicial</option>
+                <option value="appraisal_desc">Maior Avaliação</option>
+                <option value="auction_date_asc">Data mais próxima</option>
+                <option value="auction_date_desc">Data mais distante</option>
+                <option value="spread_desc">Maior Spread (Margem)</option>
+                <option value="spread_asc">Menor Spread (Margem)</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-1 lg:col-span-2 flex flex-col gap-1">
+              <span className="text-xs font-semibold text-slate-500">Ações</span>
+              <div className="flex gap-3 h-12">
+                <Button
+                  onClick={applyFilter}
+                  disabled={isRefreshing}
+                  aria-busy={isRefreshing}
+                  className="h-full flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md transition-all"
+                >
+                  {isRefreshing ? "Atualizando…" : "Filtrar Resultados"}
+                </Button>
+                {hasActiveFilters(filters) && (
+                  <Button
+                    variant="outline"
+                    onClick={clearAllFilters}
+                    aria-label="Limpar todos os filtros"
+                    title="Limpar todos os filtros"
+                    className="h-full px-4 text-slate-500 rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-semibold"
+                  >
+                    <X className="w-4 h-4" aria-hidden="true" />
+                    <span className="sr-only">Limpar filtros</span>
+                  </Button>
                 )}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-5 py-4 border-t border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <p className="text-sm text-slate-600 font-medium">
-              Mostrando {pageStart} a {pageEnd} de {totalLots} lotes
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
-              >
-                Anterior
-              </button>
-              <p className="text-sm font-semibold text-slate-700">
-                Página {currentPage} de {totalPages}
-              </p>
-              <button
-                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
-              >
-                Próxima
-              </button>
+              </div>
             </div>
           </div>
         </section>
+
+        <div className="flex justify-between items-end gap-4">
+          <div>
+            <h1 ref={resultsHeadingRef} className="text-2xl font-bold tracking-tight text-slate-900 text-balance">
+              Oportunidades Encontradas
+            </h1>
+            <p className="text-sm text-slate-600 mt-1 tabular-nums">{totalLots} imóveis e bens disponíveis</p>
+          </div>
+          {isRefreshing && (
+            <p role="status" aria-live="polite" className="text-sm font-semibold text-blue-700 animate-pulse">
+              Atualizando resultados…
+            </p>
+          )}
+        </div>
+
+        {lots.length === 0 ? (
+          <div className="bg-white rounded-3xl p-16 text-center border border-slate-200 shadow-sm">
+            <Search className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-slate-700">Nenhum lote encontrado</h2>
+            <p className="text-slate-500 mt-2">Tente mudar seus filtros de busca para ver mais resultados.</p>
+          </div>
+        ) : (
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {lots.map((lot) => {
+              const spread = calculateSpread(lot.appraisal_value, lot.min_bid);
+              
+              const defaultImage = lot.source_key.includes('receita') 
+                ? "https://www25.receita.fazenda.gov.br/sle-sociedade/assets/logo_receita.jpeg" 
+                : lot.source_key.includes('caixa') 
+                  ? "https://i.pinimg.com/736x/ae/3d/94/ae3d9448e7a543b4ad94870b9a1dcfa9.jpg" 
+                  : "https://placehold.co/400x300/e2e8f0/64748b?text=Sem+Foto";
+
+              return (
+                <div key={lot.id} className="bg-white group rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col">
+                  
+                  <div className="aspect-[4/3] bg-slate-100 relative overflow-hidden flex items-center justify-center">
+                    <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm z-10 uppercase tracking-widest">
+                      {lot.category === 'real_estate' ? 'Imóvel' : lot.category === 'vehicle' ? 'Veículo' : 'Lote'}
+                    </div>
+                    {lot.image_url ? (
+                      <img 
+                        src={lot.image_url} 
+                        alt={lot.title} 
+                        width={800}
+                        height={600}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        onError={(e) => {
+                           e.currentTarget.src = defaultImage;
+                        }}
+                      />
+                    ) : (
+                      <img 
+                        src={defaultImage} 
+                        alt={lot.title} 
+                        width={800}
+                        height={600}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    )}
+                  </div>
+
+                  <div className="p-4 flex flex-col flex-1">
+                    <div className="flex-1 space-y-2">
+                       <h2 className="font-bold text-slate-800 leading-snug line-clamp-2 text-balance" title={lot.title}>
+                         {lot.title}
+                       </h2>
+                       
+                       <div className="flex items-center text-xs text-slate-500 gap-1.5">
+                         <MapPin className="w-3.5 h-3.5" />
+                         <span className="truncate">{[lot.city, lot.state].filter(Boolean).join(" - ") || "Local não informado"}</span>
+                       </div>
+
+                       <div className="flex items-center text-xs text-slate-500 gap-1.5">
+                         <Calendar className="w-3.5 h-3.5" />
+                         <span>{lot.auction_date ? new Date(lot.auction_date).toLocaleDateString('pt-BR') : "Data indefinida"}</span>
+                       </div>
+                       
+                       {lot.description && (
+                          <p className="text-xs text-slate-500 line-clamp-2 mt-2 leading-relaxed">
+                            {lot.description}
+                          </p>
+                       )}
+                    </div>
+
+                    <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col gap-2">
+                       {lot.appraisal_value && lot.appraisal_value > (lot.min_bid || 0) && (
+                         <div className="flex flex-col text-sm">
+                           <span className="text-slate-500 font-medium">
+                             Avaliado em <span className="font-bold text-slate-700">{currency(lot.appraisal_value)}</span>
+                           </span>
+                           {spread && (
+                              <span className="text-emerald-700 font-bold mt-0.5 tabular-nums">
+                                Margem / Spread: +{spread.percent}% ({spread.formatted})
+                              </span>
+                            )}
+                         </div>
+                       )}
+                       <div className="flex items-center justify-between mt-1">
+                         <div className="flex flex-col">
+                            <span className="text-[11px] uppercase font-bold text-slate-500 tracking-wide">Lance Atual/Inicial</span>
+                            <span className="text-lg font-black text-slate-900 tabular-nums">
+                              {currency(lot.min_bid)}
+                            </span>
+                          </div>
+                       </div>
+                       
+                       {lot.lot_url && (
+                          <a 
+                            href={lot.lot_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-3 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white transition-colors w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                          >
+                            Ver Lote <ExternalLink className="w-4 h-4" />
+                          </a>
+                       )}
+                    </div>
+
+                  </div>
+                </div>
+              );
+            })}
+          </section>
+        )}
+
+        {totalLots > 0 && (
+          <div className="flex items-center justify-center gap-4 py-8">
+            <Button
+              variant="outline"
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage === 1 || isRefreshing}
+              className="font-bold border-slate-300"
+            >
+              Anterior
+            </Button>
+            <span className="text-sm font-bold text-slate-600 tabular-nums">
+              Página {currentPage} de {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages || isRefreshing}
+              className="font-bold border-slate-300"
+            >
+              Próximo
+            </Button>
+          </div>
+        )}
+
       </div>
     </main>
   );
 }
-

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -32,7 +32,9 @@ export default function LoginPage() {
     setError(null);
 
     if (!supabase) {
-      setError("Variáveis do Supabase não configuradas no frontend.");
+      setError(
+        "Supabase não configurado no frontend. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (ou NEXT_PUBLIC_SUPABASE_ANON_KEY) em frontend/.env.local e reinicie o servidor."
+      );
       return;
     }
 
@@ -121,3 +123,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -88,7 +88,9 @@ export default function DashboardPage() {
       setError(null);
 
       if (!supabase) {
-        setError("Variáveis do Supabase não configuradas no frontend.");
+        setError(
+          "Supabase não configurado no frontend. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (ou NEXT_PUBLIC_SUPABASE_ANON_KEY) em frontend/.env.local e reinicie o servidor."
+        );
         setLoading(false);
         return;
       }
@@ -489,3 +491,4 @@ export default function DashboardPage() {
     </main>
   );
 }
+

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, MapPin, Calendar, ExternalLink, LogOut } from "lucide-react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
@@ -153,7 +153,15 @@ function calculateSpread(appraisal: number | null, bid: number | null): { percen
   return { percent, formatted };
 }
 
-export default function DashboardPage() {
+function DashboardPageFallback() {
+  return (
+    <main className="min-h-screen bg-slate-50 p-6 md:p-10 flex items-center justify-center">
+      <div className="text-xl font-bold text-slate-500 animate-pulse">Carregando oportunidades…</div>
+    </main>
+  );
+}
+
+function DashboardPageContent() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -657,5 +665,13 @@ export default function DashboardPage() {
 
       </div>
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardPageFallback />}>
+      <DashboardPageContent />
+    </Suspense>
   );
 }

@@ -6,6 +6,7 @@ import { Search, X, MapPin, Calendar, ExternalLink, LogOut } from "lucide-react"
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 
 type DashboardLot = {
   id: number;
@@ -75,6 +76,7 @@ const ORDER_BY_OPTIONS = [
   "spread_desc",
   "spread_asc",
 ] as const;
+const LEGAL_DISCLAIMER_ACCEPTANCE_KEY = "radar.legal_disclaimer.accepted.v1";
 
 type SearchParamsReader = {
   get(name: string): string | null;
@@ -180,6 +182,8 @@ function DashboardPageContent() {
   const [currentPage, setCurrentPage] = useState(initialQueryState.page);
   const [filters, setFilters] = useState<LotFilters>({ ...initialQueryState.filters });
   const [filterDraft, setFilterDraft] = useState<LotFilters>({ ...initialQueryState.filters });
+  const [showLegalGate, setShowLegalGate] = useState(false);
+  const [hasAcceptedLegalGate, setHasAcceptedLegalGate] = useState(false);
 
   const syncUrlState = useCallback(
     (nextFilters: LotFilters, nextPage: number) => {
@@ -196,6 +200,17 @@ function DashboardPageContent() {
     setFilters((prev) => (areFiltersEqual(prev, nextState.filters) ? prev : nextState.filters));
     setFilterDraft((prev) => (areFiltersEqual(prev, nextState.filters) ? prev : nextState.filters));
   }, [searchParams]);
+
+  useEffect(() => {
+    try {
+      const alreadyAccepted = window.localStorage.getItem(LEGAL_DISCLAIMER_ACCEPTANCE_KEY) === "true";
+      if (!alreadyAccepted) {
+        setShowLegalGate(true);
+      }
+    } catch {
+      setShowLegalGate(true);
+    }
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -316,6 +331,16 @@ function DashboardPageContent() {
     if (!supabase) return;
     await supabase.auth.signOut();
     router.replace("/auth/login");
+  }
+
+  function confirmLegalDisclaimer() {
+    if (!hasAcceptedLegalGate) return;
+    try {
+      window.localStorage.setItem(LEGAL_DISCLAIMER_ACCEPTANCE_KEY, "true");
+    } catch {
+      // Se o browser bloquear storage, ainda permitimos seguir nesta sessao.
+    }
+    setShowLegalGate(false);
   }
 
   const totalPages = Math.max(1, Math.ceil(totalLots / PAGE_SIZE));
@@ -630,6 +655,8 @@ function DashboardPageContent() {
                             Ver Lote <ExternalLink className="w-4 h-4" />
                           </a>
                        )}
+
+                       <LegalDisclaimer compact className="mt-3" />
                     </div>
 
                   </div>
@@ -664,6 +691,46 @@ function DashboardPageContent() {
         )}
 
       </div>
+
+      {showLegalGate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="legal-disclaimer-title"
+            className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+          >
+            <h2 id="legal-disclaimer-title" className="text-xl font-black text-slate-900">
+              Confirmação obrigatória
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Antes de usar o RadarSP, confirme que você leu e concorda com o aviso legal abaixo.
+            </p>
+
+            <LegalDisclaimer className="mt-4" />
+
+            <label className="mt-4 flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                checked={hasAcceptedLegalGate}
+                onChange={(event) => setHasAcceptedLegalGate(event.currentTarget.checked)}
+              />
+              <span>Li e concordo com o aviso legal e com a isenção de responsabilidade.</span>
+            </label>
+
+            <div className="mt-5 flex justify-end">
+              <Button
+                onClick={confirmLegalDisclaimer}
+                disabled={!hasAcceptedLegalGate}
+                className="bg-slate-900 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Continuar para o dashboard
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

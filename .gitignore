@@ -46,3 +46,7 @@ Thumbs.db
 
 # Vercel / Deployments
 .vercel
+
+# Docusaurus
+docs-site/.docusaurus/
+docs-site/.cache-loader/

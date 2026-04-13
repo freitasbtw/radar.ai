@@ -177,3 +177,22 @@ Documentação das fontes de dados e integrações:
 ## Licença
 
 Definir licença do projeto antes de publicação externa.
+
+## Portal de Documentacao (Docusaurus)
+
+O repositorio inclui um portal de docs em `docs-site/` que usa como fonte os arquivos em `docs/`.
+
+Executar localmente:
+
+```bash
+cd docs-site
+npm install
+npm start
+```
+
+Build de producao:
+
+```bash
+cd docs-site
+npm run build
+```

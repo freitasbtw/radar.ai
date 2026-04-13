@@ -301,8 +301,12 @@ const App = () => {
             © 2026 Radar SP - Inteligência de Dados
           </div>
           <div className="flex gap-6 text-slate-500 font-medium text-sm">
-            <a href="#" className="hover:text-blue-600 transition-colors">Termos</a>
-            <a href="#" className="hover:text-blue-600 transition-colors">Privacidade</a>
+            <Link href="/legal/termos-e-politica-de-venda#termos-de-servico" className="hover:text-blue-600 transition-colors">
+              Termos
+            </Link>
+            <Link href="/legal/termos-e-politica-de-venda#politica-de-venda" className="hover:text-blue-600 transition-colors">
+              Politica de Venda
+            </Link>
           </div>
         </div>
       </footer>

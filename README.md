@@ -80,13 +80,21 @@ SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 # Worker de ingestão
 INGESTION_WORKER_ENABLED=false
 INGESTION_WORKER_INTERVAL_SECONDS=60
+
+# Token obrigatório para endpoints operacionais de ingestão
+INGESTION_API_TOKEN=YOUR_LONG_RANDOM_TOKEN
 ```
 
 No frontend, crie `frontend/.env.local` com:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+# opcional (legado)
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+
+# opcional: habilita o formulário de contato usando mailto
+# NEXT_PUBLIC_CONTACT_EMAIL=contato@seudominio.com
 ```
 
 ## Como Rodar Localmente

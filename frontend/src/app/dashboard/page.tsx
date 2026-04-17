@@ -1,7 +1,8 @@
 ﻿"use client";
 
+import Image, { type ImageLoaderProps } from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, MapPin, Calendar, ExternalLink, LogOut } from "lucide-react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,10 @@ const LEGAL_DISCLAIMER_ACCEPTANCE_KEY = "radar.legal_disclaimer.accepted.v1";
 type SearchParamsReader = {
   get(name: string): string | null;
 };
+
+type AuthStatus = "checking" | "authenticated" | "unauthenticated" | "misconfigured";
+
+const remoteImageLoader = ({ src }: ImageLoaderProps) => src;
 
 function parseDashboardStateFromQuery(searchParams: SearchParamsReader): {
   page: number;
@@ -163,6 +168,40 @@ function DashboardPageFallback() {
   );
 }
 
+function LotCardImage({
+  src,
+  fallbackSrc,
+  alt,
+}: {
+  src: string | null;
+  fallbackSrc: string;
+  alt: string;
+}) {
+  const resolvedSrc = src ?? fallbackSrc;
+  const [currentSrc, setCurrentSrc] = useState(resolvedSrc);
+
+  useEffect(() => {
+    setCurrentSrc(resolvedSrc);
+  }, [resolvedSrc]);
+
+  return (
+    <Image
+      loader={remoteImageLoader}
+      unoptimized
+      src={currentSrc}
+      alt={alt}
+      fill
+      sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
+      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+      onError={() => {
+        if (currentSrc !== fallbackSrc) {
+          setCurrentSrc(fallbackSrc);
+        }
+      }}
+    />
+  );
+}
+
 function DashboardPageContent() {
   const pathname = usePathname();
   const router = useRouter();
@@ -178,18 +217,22 @@ function DashboardPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [lots, setLots] = useState<DashboardLot[]>([]);
   const [pollState, setPollState] = useState<PollState[]>([]);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
   const [totalLots, setTotalLots] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(initialQueryState.page);
   const [filters, setFilters] = useState<LotFilters>({ ...initialQueryState.filters });
   const [filterDraft, setFilterDraft] = useState<LotFilters>({ ...initialQueryState.filters });
-  const [showLegalGate, setShowLegalGate] = useState(false);
+  const [legalGateResolved, setLegalGateResolved] = useState(false);
+  const [showLegalGate, setShowLegalGate] = useState(true);
   const [hasAcceptedLegalGate, setHasAcceptedLegalGate] = useState(false);
 
   const syncUrlState = useCallback(
     (nextFilters: LotFilters, nextPage: number) => {
       const query = buildDashboardQueryString(nextFilters, nextPage);
       const href = query ? `${pathname}?${query}` : pathname;
-      router.replace(href, { scroll: false });
+      startTransition(() => {
+        router.replace(href, { scroll: false });
+      });
     },
     [pathname, router]
   );
@@ -202,17 +245,62 @@ function DashboardPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
+    let isActive = true;
+
+    async function validateSession() {
+      if (!supabase) {
+        if (!isActive) return;
+        setError(
+          "Supabase não configurado no frontend. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY em frontend/.env.local"
+        );
+        setAuthStatus("misconfigured");
+        setLoading(false);
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!isActive) return;
+
+      if (!sessionData.session) {
+        setAuthStatus("unauthenticated");
+        router.replace("/auth/login");
+        return;
+      }
+
+      setAuthStatus("authenticated");
+    }
+
+    validateSession();
+
+    return () => {
+      isActive = false;
+    };
+  }, [router, supabase]);
+
+  useEffect(() => {
     try {
       const alreadyAccepted = window.localStorage.getItem(LEGAL_DISCLAIMER_ACCEPTANCE_KEY) === "true";
-      if (!alreadyAccepted) {
-        setShowLegalGate(true);
-      }
+      setHasAcceptedLegalGate(alreadyAccepted);
+      setShowLegalGate(!alreadyAccepted);
     } catch {
       setShowLegalGate(true);
+    } finally {
+      setLegalGateResolved(true);
     }
   }, []);
 
   useEffect(() => {
+    if (authStatus === "authenticated" && legalGateResolved && showLegalGate) {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [authStatus, legalGateResolved, showLegalGate]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !legalGateResolved || showLegalGate) {
+      return;
+    }
+
     let isActive = true;
 
     async function loadDashboardData() {
@@ -225,25 +313,10 @@ function DashboardPageContent() {
       }
 
       try {
-        if (!supabase) {
-          if (!isActive) return;
-          setError(
-            "Supabase não configurado no frontend. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY em frontend/.env.local"
-          );
-          return;
-        }
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!isActive) return;
-        if (!sessionData.session) {
-          router.replace("/auth/login");
-          return;
-        }
-
         const from = (currentPage - 1) * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
-        let lotsQuery = supabase
+        let lotsQuery = supabase!
           .from("auction_lots")
           .select("id,source_key,title,category,status,city,state,min_bid,lot_url,auction_date,updated_at,image_url,appraisal_value,description", {
             count: "exact",
@@ -284,7 +357,7 @@ function DashboardPageContent() {
 
         const pollPromise = pollStateLoadedRef.current
           ? Promise.resolve({ data: null, error: null })
-          : supabase
+          : supabase!
               .from("source_poll_state")
               .select("source_key,last_success_at,consecutive_failures,next_poll_at")
               .order("source_key", { ascending: true });
@@ -325,7 +398,7 @@ function DashboardPageContent() {
     return () => {
       isActive = false;
     };
-  }, [currentPage, filters, router, supabase]);
+  }, [authStatus, currentPage, filters, legalGateResolved, showLegalGate, supabase]);
 
   async function signOut() {
     if (!supabase) return;
@@ -344,6 +417,15 @@ function DashboardPageContent() {
   }
 
   const totalPages = Math.max(1, Math.ceil(totalLots / PAGE_SIZE));
+  const latestSuccessfulPoll = useMemo(() => {
+    return pollState.reduce<string | null>((latest, item) => {
+      if (!item.last_success_at) return latest;
+      if (!latest) return item.last_success_at;
+      return new Date(item.last_success_at).getTime() > new Date(latest).getTime()
+        ? item.last_success_at
+        : latest;
+    }, null);
+  }, [pollState]);
 
   function applyFilter() {
     const nextFilters: LotFilters = {
@@ -376,7 +458,7 @@ function DashboardPageContent() {
     resultsHeadingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  if (loading) {
+  if (authStatus === "checking" || authStatus === "unauthenticated" || !legalGateResolved || (loading && !showLegalGate)) {
     return (
       <main className="min-h-screen bg-slate-50 p-6 md:p-10 flex items-center justify-center">
          <div className="text-xl font-bold text-slate-500 animate-pulse">Carregando oportunidades…</div>
@@ -541,7 +623,10 @@ function DashboardPageContent() {
             <h1 ref={resultsHeadingRef} className="text-2xl font-bold tracking-tight text-slate-900 text-balance">
               Oportunidades Encontradas
             </h1>
-            <p className="text-sm text-slate-600 mt-1 tabular-nums">{totalLots} imóveis e bens disponíveis</p>
+            <p className="text-sm text-slate-600 mt-1 tabular-nums">
+              {totalLots} imóveis e bens disponíveis
+              {latestSuccessfulPoll ? ` • última sincronização registrada em ${dateTime(latestSuccessfulPoll)}` : ""}
+            </p>
           </div>
           {isRefreshing && (
             <p role="status" aria-live="polite" className="text-sm font-semibold text-blue-700 animate-pulse">
@@ -574,30 +659,7 @@ function DashboardPageContent() {
                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm z-10 uppercase tracking-widest">
                       {lot.category === 'real_estate' ? 'Imóvel' : lot.category === 'vehicle' ? 'Veículo' : 'Lote'}
                     </div>
-                    {lot.image_url ? (
-                      <img 
-                        src={lot.image_url} 
-                        alt={lot.title} 
-                        width={800}
-                        height={600}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError={(e) => {
-                           e.currentTarget.src = defaultImage;
-                        }}
-                      />
-                    ) : (
-                      <img 
-                        src={defaultImage} 
-                        alt={lot.title} 
-                        width={800}
-                        height={600}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                    )}
+                    <LotCardImage src={lot.image_url} fallbackSrc={defaultImage} alt={lot.title} />
                   </div>
 
                   <div className="p-4 flex flex-col flex-1">

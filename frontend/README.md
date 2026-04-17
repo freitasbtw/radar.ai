@@ -20,6 +20,8 @@ NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
 # opcional (legado)
 # NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+# opcional: habilita o formulário de contato usando mailto
+# NEXT_PUBLIC_CONTACT_EMAIL=contato@seudominio.com
 ```
 
 Observação: se alterar variáveis, reinicie o `npm run dev`.

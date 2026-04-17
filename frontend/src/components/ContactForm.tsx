@@ -21,7 +21,9 @@ const formSchema = z.object({
   message: z.string().min(10, "A mensagem deve ter pelo menos 10 caracteres.")
 });
 
-export function ContactForm({ onSuccess }: { onSuccess?: () => void }) {
+export function ContactForm() {
+  const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim();
+  const isContactConfigured = Boolean(contactEmail);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -32,8 +34,22 @@ export function ContactForm({ onSuccess }: { onSuccess?: () => void }) {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log("Send feedback payload:", values);
-    if (onSuccess) onSuccess();
+    if (!contactEmail) {
+      return;
+    }
+
+    const subject = encodeURIComponent(`Contato RadarSP - ${values.name}`);
+    const body = encodeURIComponent(
+      [
+        `Nome: ${values.name}`,
+        `E-mail: ${values.email}`,
+        "",
+        "Mensagem:",
+        values.message,
+      ].join("\n")
+    );
+
+    window.location.assign(`mailto:${contactEmail}?subject=${subject}&body=${body}`);
     form.reset();
   }
 
@@ -84,10 +100,15 @@ export function ContactForm({ onSuccess }: { onSuccess?: () => void }) {
           )}
         />
         <div className="pt-2">
-          <Button type="submit" className="w-full">
-            Enviar Mensagem
+          <Button type="submit" className="w-full" disabled={!isContactConfigured}>
+            {isContactConfigured ? "Continuar por E-mail" : "Contato indisponível"}
           </Button>
         </div>
+        <p className="text-xs leading-5 text-slate-500">
+          {isContactConfigured
+            ? `Ao enviar, abriremos seu cliente de e-mail para ${contactEmail}.`
+            : "Defina NEXT_PUBLIC_CONTACT_EMAIL para habilitar o contato a partir desta tela."}
+        </p>
       </form>
     </Form>
   );

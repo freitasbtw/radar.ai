@@ -1,5 +1,6 @@
 "use client";
 
+import Image, { type ImageLoaderProps } from "next/image";
 import Link from "next/link";
 import React, { useState, useEffect } from 'react';
 import { 
@@ -32,6 +33,8 @@ import {
 } from "@/components/ui/card";
 import { ContactForm } from "@/components/ContactForm";
 import { cn } from "@/lib/utils";
+
+const remoteImageLoader = ({ src }: ImageLoaderProps) => src;
 
 const App = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -72,6 +75,26 @@ const App = () => {
             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </Button>
         </div>
+
+        {isMenuOpen && (
+          <div className="md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-md shadow-md">
+            <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3 font-bold text-slate-700">
+              <a href="#como-funciona" className="rounded-lg px-3 py-2 hover:bg-slate-100" onClick={() => setIsMenuOpen(false)}>
+                Como Funciona
+              </a>
+              <a href="#lucro" className="rounded-lg px-3 py-2 hover:bg-slate-100" onClick={() => setIsMenuOpen(false)}>
+                Setores
+              </a>
+              <Link
+                href="/auth/login"
+                className={cn(buttonVariants(), "rounded-xl shadow-sm text-sm")}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Acessar Agora
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
@@ -111,10 +134,10 @@ const App = () => {
                   <DialogHeader>
                     <DialogTitle>Entre em contato</DialogTitle>
                     <DialogDescription>
-                      Tem dúvidas sobre a plataforma? Envie uma mensagem e entraremos em contato o mais breve possível.
+                      Tem dúvidas sobre a plataforma? Preencha os campos para abrir seu cliente de e-mail com a mensagem pronta.
                     </DialogDescription>
                   </DialogHeader>
-                  <ContactForm onSuccess={() => alert("Mensagem enviada com sucesso!")} />
+                  <ContactForm />
                 </DialogContent>
               </Dialog>
             </div>
@@ -172,19 +195,31 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-center text-slate-400 text-sm font-black uppercase tracking-[0.3em] mb-16">Analisamos diariamente dados oficiais de:</p>
           <div className="flex flex-wrap justify-center items-center gap-16 md:gap-32">
-            <img 
-              src="https://images.seeklogo.com/logo-png/62/2/detran-logo-png_seeklogo-622008.png" 
-              alt="Detran SP" 
+            <Image
+              loader={remoteImageLoader}
+              unoptimized
+              src="https://images.seeklogo.com/logo-png/62/2/detran-logo-png_seeklogo-622008.png"
+              alt="Detran SP"
+              width={240}
+              height={176}
               className="h-24 md:h-44 w-auto object-contain hover:scale-110 transition-transform cursor-pointer"
             />
-            <img 
-              src="https://upload.wikimedia.org/wikipedia/commons/e/e8/Logo_Receita_Federal_do_Brasil.svg" 
-              alt="Receita Federal" 
+            <Image
+              loader={remoteImageLoader}
+              unoptimized
+              src="https://upload.wikimedia.org/wikipedia/commons/e/e8/Logo_Receita_Federal_do_Brasil.svg"
+              alt="Receita Federal"
+              width={240}
+              height={160}
               className="h-20 md:h-40 w-auto object-contain hover:scale-110 transition-transform cursor-pointer"
             />
-            <img 
-              src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Caixa_Econ%C3%B4mica_Federal_logo.svg/3840px-Caixa_Econ%C3%B4mica_Federal_logo.svg.png" 
-              alt="Caixa" 
+            <Image
+              loader={remoteImageLoader}
+              unoptimized
+              src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Caixa_Econ%C3%B4mica_Federal_logo.svg/3840px-Caixa_Econ%C3%B4mica_Federal_logo.svg.png"
+              alt="Caixa"
+              width={240}
+              height={64}
               className="h-10 md:h-16 w-auto object-contain opacity-50 hover:opacity-100 transition-all"
             />
           </div>

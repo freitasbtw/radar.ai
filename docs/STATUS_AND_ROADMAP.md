@@ -1,6 +1,6 @@
 # Estado Atual vs Roadmap
 
-Ultima atualizacao: 2026-04-12
+Ultima atualizacao: 2026-04-17
 
 Este documento compara o que ja esta implementado no codigo com o que ainda esta planejado.
 
@@ -14,6 +14,7 @@ Este documento compara o que ja esta implementado no codigo com o que ainda esta
   - `GET /api/ingestion/health`
   - `POST /api/ingestion/run-due`
   - `POST /api/ingestion/run/:sourceKey`
+- Endpoints operacionais de ingestao protegidos por bearer token (`INGESTION_API_TOKEN`).
 - Worker de ingestao com scheduler controlado por env:
   - `INGESTION_WORKER_ENABLED`
   - `INGESTION_WORKER_INTERVAL_SECONDS`
@@ -31,6 +32,7 @@ Este documento compara o que ja esta implementado no codigo com o que ainda esta
   - filtros (titulo, origem, categoria, local, status)
   - ordenacao (incluindo spread)
   - paginacao
+- O carregamento dos lotes agora depende de sessao autenticada valida e do aceite local do aviso legal.
 - No estado atual, o dashboard consulta Supabase diretamente (nao usa endpoint `/api/lots` do backend).
 
 ## Banco e Migracoes

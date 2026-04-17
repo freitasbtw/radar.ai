@@ -15,6 +15,8 @@ Objetivo: manter uma fonte unica de verdade que acompanha a evolucao do projeto.
   - product spec, tech spec e template de novas features.
 - `db/migrations/`
   - historico versionado de schema SQL.
+- `runbooks/`
+  - operacao e troubleshooting (jobs, incidentes, rollback).
 
 ## Arquitetura Recomendada de Documentos
 

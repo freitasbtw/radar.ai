@@ -521,7 +521,7 @@ async function ingestReceita(source: SourceRegistryRow): Promise<IngestionSummar
         warningMessages.push(`Detail fetch failed (${detailResponse.status}) for ${editalIndex.edle}`);
         continue;
       }
-      detailJson = await detailResponse.json();
+      detailJson = (await detailResponse.json()) as typeof detailJson;
     } catch (error) {
       errorCount += 1;
       warningMessages.push(
